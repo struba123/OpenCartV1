@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>28-09-2022 12-31-56.html</h1>
+    <p>Report generated on 28-Sep-2022 at 12:32:01 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.3"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.22000-SP0</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.6</td></tr></table>
+    <h2>Summary</h2>
+    <p>1 tests ran in 5.48 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">0 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">testCases/test_003_login_ddt.py::Test_Login_DDT::test_login_ddt</td>
+          <td class="col-duration">4.79</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;testCases.test_003_login_ddt.Test_Login_DDT object at 0x000001C14F6B3B20&gt;, setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;ecfc7ccd2e0afe66d6aa9a1fd364117f&quot;)&gt;<br/><br/>    def test_login_ddt(self,setup):<br/>        self.logger.info(&quot;*******starting test_003_login_Datadriven******&quot;)<br/>&gt;       self.rows=XLUtiles.getRowCount(self.path,&#x27;Sheet1&#x27;)<br/><br/>testCases\test_003_login_ddt.py:20: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>utilities\XLUtiles.py:5: in getRowCount<br/>    workbook = openpyxl.load_workbook(file)<br/>venv\lib\site-packages\openpyxl\reader\excel.py:315: in load_workbook<br/>    reader = ExcelReader(filename, read_only, keep_vba,<br/>venv\lib\site-packages\openpyxl\reader\excel.py:124: in __init__<br/>    self.archive = _validate_archive(fn)<br/>venv\lib\site-packages\openpyxl\reader\excel.py:96: in _validate_archive<br/>    archive = ZipFile(filename, &#x27;r&#x27;)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;zipfile.ZipFile [closed]&gt;, file = &#x27;C:\\Users\\Saurabh\\PycharmProjects\\OpenCartV1\\testdata\\Opencart\\LoginData.xlsx&#x27;, mode = &#x27;r&#x27;, compression = 0, allowZip64 = True<br/>compresslevel = None<br/><br/>    def __init__(self, file, mode=&quot;r&quot;, compression=ZIP_STORED, allowZip64=True,<br/>                 compresslevel=None, *, strict_timestamps=True):<br/>        &quot;&quot;&quot;Open the ZIP file with mode read &#x27;r&#x27;, write &#x27;w&#x27;, exclusive create &#x27;x&#x27;,<br/>        or append &#x27;a&#x27;.&quot;&quot;&quot;<br/>        if mode not in (&#x27;r&#x27;, &#x27;w&#x27;, &#x27;x&#x27;, &#x27;a&#x27;):<br/>            raise ValueError(&quot;ZipFile requires mode &#x27;r&#x27;, &#x27;w&#x27;, &#x27;x&#x27;, or &#x27;a&#x27;&quot;)<br/>    <br/>        _check_compression(compression)<br/>    <br/>        self._allowZip64 = allowZip64<br/>        self._didModify = False<br/>        self.debug = 0  # Level of printing: 0 through 3<br/>        self.NameToInfo = {}    # Find file info given name<br/>        self.filelist = []      # List of ZipInfo instances for archive<br/>        self.compression = compression  # Method of compression<br/>        self.compresslevel = compresslevel<br/>        self.mode = mode<br/>        self.pwd = None<br/>        self._comment = b&#x27;&#x27;<br/>        self._strict_timestamps = strict_timestamps<br/>    <br/>        # Check if we were passed a file-like object<br/>        if isinstance(file, os.PathLike):<br/>            file = os.fspath(file)<br/>        if isinstance(file, str):<br/>            # No, it&#x27;s a filename<br/>            self._filePassed = 0<br/>            self.filename = file<br/>            modeDict = {&#x27;r&#x27; : &#x27;rb&#x27;, &#x27;w&#x27;: &#x27;w+b&#x27;, &#x27;x&#x27;: &#x27;x+b&#x27;, &#x27;a&#x27; : &#x27;r+b&#x27;,<br/>                        &#x27;r+b&#x27;: &#x27;w+b&#x27;, &#x27;w+b&#x27;: &#x27;wb&#x27;, &#x27;x+b&#x27;: &#x27;xb&#x27;}<br/>            filemode = modeDict[mode]<br/>            while True:<br/>                try:<br/>&gt;                   self.fp = io.open(file, filemode)<br/><span class="error">E                   FileNotFoundError: [Errno 2] No such file or directory: &#x27;C:\\Users\\Saurabh\\PycharmProjects\\OpenCartV1\\testdata\\Opencart\\LoginData.xlsx&#x27;</span><br/><br/>..\..\AppData\Local\Programs\Python\Python310\lib\zipfile.py:1249: FileNotFoundError<br/> -----------------------------Captured stdout setup------------------------------ <br/>Launching Chrome browser.......
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:11 ====== WebDriver manager ======
+INFO     WDM:logger.py:11 Get LATEST chromedriver version for google-chrome 105.0.5195
+INFO     WDM:logger.py:11 Driver [C:\Users\Saurabh\.wdm\drivers\chromedriver\win32\105.0.5195\chromedriver.exe] found in cache<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     root:test_003_login_ddt.py:19 *******starting test_003_login_Datadriven******<br/></div></td></tr></tbody></table></body></html>
